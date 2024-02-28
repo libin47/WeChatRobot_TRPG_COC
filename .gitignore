@@ -1,0 +1,13 @@
+.*
+!.gitignore
+!.github/
+dist/
+build/
+data/
+*pyc
+__pycache__
+
+logs/
+*.log
+*.log.*
+

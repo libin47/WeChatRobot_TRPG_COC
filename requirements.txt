@@ -1,0 +1,12 @@
+lxml
+pyyaml
+requests
+schedule
+pyhandytools
+wcferry>=39.0.10.0
+websocket
+pillow
+jupyter_client
+zhdate
+ipykernel
+
