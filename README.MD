@@ -20,10 +20,11 @@
 pyinstaller -F --add-data "config.yaml;." --add-data "C:\...\Python39\site-packages\wcferry\*;.\wcferry"  main.py 
 ```
 ### 可选2
-如果想直接使用可直接下载打包好的exe文件，在启动微信后直接运行即可（未测试，应该是需windows10+系统）
+如果想直接使用可[直接下载打包好的exe文件](https://github.com/libin47/WeChatRobot_TRPG_COC/releases/download/exe/main.exe)，在启动微信后直接运行即可（未测试，应该是需windows10+系统）
 
 ## 目前实现功能
 未特别说明的功能仅限群聊可用。
+
 ![img.png](pic/show.png)
 ### 【基础投掷】
 #### .r\[投掷表达式]([投掷原因])
