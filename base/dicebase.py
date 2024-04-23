@@ -117,7 +117,7 @@ class DiceBase(object):
         self.wcf.send_image(os.path.join(dirname, data["url"][0]), group if group else wxid)
         self.wcf.send_image(os.path.join(dirname, data["url"][1]), group if group else wxid)
         # 发送结果
-        res = "您抽中了【%s】卦。\n【原文】%s\n\n%s\n%s"%(key, data["原文"], data["彖曰"], data["象曰"])
+        res = "[%s]您抽中了【%s】卦。\n【原文】%s\n\n%s\n%s"%(self._get_name(wxid), key, data["原文"], data["彖曰"], data["象曰"])
         if len(data["文言曰"])>0:
             res += "\n" + "\n".join(data["文言曰"])
 
@@ -129,7 +129,7 @@ class DiceBase(object):
         result = random.sample(keylist, 3)
         zn = random.choices([1,-1], k=3)
         # 文字结果
-        res = "您以塔罗牌【时间序列】进行占卜，抽中结果为【%s】"%(",".join([result[i] + ("" if zn[i]>0 else "(逆位)") for i in range(3)]))
+        res = "[%s]您以塔罗牌【时间序列】进行占卜，抽中结果为【%s】"%(self._get_name(wxid), ",".join([result[i] + ("" if zn[i]>0 else "(逆位)") for i in range(3)]))
         # 图片结果1
         img1 = Image.open(tldata[result[0]]["image"])
 

@@ -3,9 +3,11 @@ import requests
 import json
 from base.dicebase import DiceBase
 import re
+from wcferry import Wcf, WxMsg
+import time
 
 class Network(DiceBase):
-    def __init__(self, config, wcf):
+    def __init__(self, config, wcf:Wcf):
         super(Network, self).__init__(config, wcf)
         self.data = {}
         self.api = config['api']
@@ -61,22 +63,33 @@ class Network(DiceBase):
                 return c
         return False
 
-    def get_answer(self, cmd: str, msg) -> str:
+    def get_answer(self, cmd: str, msg: WxMsg) -> str:
         # 获取回答主函数
         isgroup = msg.from_group()
         wxid = msg.sender
         cmd = self._clear_cmd(cmd)
         if isgroup:
             group = msg.roomid
-            result = self.get_group_answer(cmd, wxid, group)
-            self.save_log(group, wxid, cmd, result)
+            self._init_group(group)
+            isat = False
+            if "users" in self.data[group].keys():
+                for key in self.data[group]["users"]:
+                    if msg.is_at(key):
+                        isat = True
+                        result = self.get_group_answer(cmd, key, group)
+                        if result:
+                            self.wcf.send_text(f"{result}", group)
+            if isat:
+                return ""
+            else:
+                result = self.get_group_answer(cmd, wxid, group)
+                self.save_log(group, wxid, cmd, result)
+                return result
         else:
             result = self.get_user_answer(cmd, wxid)
         return result
 
     def get_group_answer(self, cmd:str, wxid:str, group:str):
-        # 更新状态
-        self._init_group(group)
         # 处理或记录
         cd = self.cmd2fun_group(cmd)
         if cd:
@@ -94,9 +107,10 @@ class Network(DiceBase):
         data_new = self._get_group_status(group)
         if data_new:
             self.data[group] = data_new
+            self.data[group]["users"] = list(self.wcf.get_chatroom_members(group))
         return "【群规】已刷新：天命%s或购点%s，大成功%s，大失败%s"%(self.data[group]["config"]["dicetime"], self.data[group]["config"]["point"],
-                                                                self.data[group]["config"]["succnum"] if self.data[group]["config"]["succnum"]>0 else "默认",
-                                                                self.data[group]["config"]["failnum"] if self.data[group]["config"]["failnum"]>0 else "默认")
+                                                                self.data[group]["config"]["succnum"] if "succnum" in self.data[group]["config"].keys() and self.data[group]["config"]["succnum"]>0 else "默认",
+                                                                self.data[group]["config"]["failnum"] if "failnum" in self.data[group]["config"].keys()  and  self.data[group]["config"]["failnum"]>0 else "默认")
 
 
     def help_group(self, group, wxid, cmd):
@@ -857,6 +871,7 @@ class Network(DiceBase):
             else:
                 self._update_group_config(group, {"point":500, "dicetime": 5})
                 self._init_group(group)
+        self.data[group]["users"] = list(self.wcf.get_chatroom_members(group))
         return True
 
     def _get_group_status(self, group):
