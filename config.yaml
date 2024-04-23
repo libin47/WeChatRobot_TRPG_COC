@@ -44,3 +44,7 @@ groups:
 myself:
   file_path : ./data/
   file_name : mydata.pk
+  save: api
+  api: "https://wxapp.wind-watcher.cn"
+#  api: "http://127.0.0.1:7684"
+#  api: http://192.168.137.79:7684

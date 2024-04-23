@@ -56,7 +56,7 @@ class Robot(Job):
         else:
             q = re.sub(r"@.*?[\u2005|\s]", "", msg.content).replace(" ", "")
             if len(q) > 0:  # and q[0] == '.'
-                rsp = self.chat.get_answer(q, (msg.roomid if msg.from_group() else msg.sender), msg)
+                rsp = self.chat.get_answer(q, msg)
 
         if rsp:
             if msg.from_group():

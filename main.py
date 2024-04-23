@@ -32,4 +32,5 @@ if __name__ == "__main__":
     # parser = ArgumentParser()
     # parser.add_argument('-c', type=int, default=9, help=f'选择模型参数序号: {ChatType.help_hint()}')
     # args = parser.parse_args().c
+    # start_app()
     main()
