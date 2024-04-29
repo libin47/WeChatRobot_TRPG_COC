@@ -19,14 +19,14 @@ class Network(DiceBase):
             {"re": "\.end", "fun": self.game_end, "help": ".end 游戏结束"},
             {"re": "\.log", "fun": self.get_log, "help": ".log 获取日志"},
             {"re": "\.jrrp", "fun": self.jrrp_group, "help": ".jrrp 今日人品"},
-            {"re": "每日一卦|签", "fun": self.jrrp_yj_group, "help": "每日一卦 抽一卦"},
+            {"re": "每日一卦", "fun": self.jrrp_yj_group, "help": "每日一卦 抽一卦"},
             {"re": "塔罗", "fun": self.jrrp_tl_group, "help": "塔罗 塔罗牌来一卦"},
             {"re": "\.pc(new)?", "fun": self.coc_new_pc, "help": ".pc 获取PC角色卡面板地址"},
             {"re": "\.admin", "fun": self.coc_admin, "help": ".admin 获取KP管理面板地址"},
-            {"re": "\.r.*", "fun": self.coc_roll, "help": ".r[表达式] 投骰"},
-            {"re": "\.ra.+", "fun": self.coc_ra, "help": ".ra[次数#][属性/技能] 进行属性和技能检定"},
+            {"re": "\.r.*", "fun": self.coc_roll, "help": ".r[h][表达式] 投骰"},
+            {"re": "\.ra.+", "fun": self.coc_ra, "help": ".ra[h][次数#][属性/技能] 进行属性和技能检定"},
             {"re": "\.stshow", "fun": self.coc_stshow, "help": ".stshow 查看基本信息"},
-            {"re": "\.rc.+", "fun": self.coc_ra, "help": ".rc[次数#][属性/技能][目标值] 进行属性和技能检定，指定目标检定"},
+            {"re": "\.rc.+", "fun": self.coc_ra, "help": ".rc[h][次数#][属性/技能][目标值] 进行属性和技能检定，指定目标检定"},
             {"re": "\.st.+", "fun": self.coc_st, "help": ".st[hp/mp/san][+-][变动值] 数值变更"},
             {"re": "\.dex.+", "fun": self.coc_dex, "help": ".dex[姓名80(敏捷数值)] 敏捷排序"},
             {"re": "\.en", "fun": self.coc_en, "help": ".en 成长检定"},
@@ -36,14 +36,14 @@ class Network(DiceBase):
             {"re": "\.li", "fun": self.coc_li, "help": ".li 生成总结疯狂症状"},
             {"re": "\.flash", "fun": self.coc_flash, "help": ".flash 刷新群组设置"},
             {"re": "\.group.+", "fun": self.coc_group, "help": ".group [gd[购点数量]] [time[随机次数]] [s[大成功点数]] [f[大失败点数]] 房规设置"},
-            {"re": "\.help", "fun": self.help_group, "help": ".help 帮助"},
+            {"re": "\.help.*", "fun": self.help_group, "help": ".help[r][ra] 帮助"},
         ]
         self.cmds_self = [
             {"re": "\.jrrp", "fun": self.jrrp_self, "help": ".jrrp 今日人品"},
-            {"re": "每日一卦|签", "fun": self.jrrp_yj_self, "help": "每日一卦 抽一卦"},
+            {"re": "每日一卦", "fun": self.jrrp_yj_self, "help": "每日一卦 抽一卦"},
             {"re": "\.pc", "fun": self.coc_pc_self, "help": ".pc 打开角色管理面板"},
             {"re": "\.r.*", "fun": self.coc_roll_self, "help": ".r[表达式] 投骰"},
-            {"re": "\.help", "fun": self.help_self, "help": ".help 帮助"},
+            {"re": "\.help.*", "fun": self.help_self, "help": ".help 帮助"},
             {"re": "塔罗", "fun": self.jrrp_tl_self, "help": "塔罗 塔罗牌来一卦"},
         ]
 
@@ -76,34 +76,39 @@ class Network(DiceBase):
                 for key in self.data[group]["users"]:
                     if msg.is_at(key):
                         isat = True
-                        result = self.get_group_answer(cmd, key, group)
+                        result = self.get_group_answer(cmd, key, group, wxid)
+                        self.save_log(group=group, wxid=wxid, cmd=cmd, result=result)
                         if result:
                             self.wcf.send_text(f"{result}", group)
-            if isat:
-                return ""
-            else:
+            if not isat:
                 result = self.get_group_answer(cmd, wxid, group)
-                self.save_log(group, wxid, cmd, result)
+                self.save_log(group=group, wxid=wxid, cmd=cmd, result=result)
                 return result
+            else:
+                return ""
         else:
             result = self.get_user_answer(cmd, wxid)
-        return result
+            return result
 
-    def get_group_answer(self, cmd:str, wxid:str, group:str):
+    def get_group_answer(self, cmd:str, wxid:str, group:str, sender:str=""):
         # 处理或记录
         cd = self.cmd2fun_group(cmd)
         if cd:
             if not ("super" in cd.keys() and cd["super"]) and (not ("status" in self.data[group].keys() and self.data[group]["status"])):
                 return
-            return cd["fun"](group, wxid, cmd)
+            if sender:
+                return cd["fun"](group=group, wxid=wxid, cmd=cmd, sender=sender)
+            else:
+                return cd["fun"](group=group, wxid=wxid, cmd=cmd, sender=wxid)
 
     def get_user_answer(self, cmd:str, wxid:str):
         # 处理或记录
         cd = self.cmd2fun_self(cmd)
         if cd:
-            return cd["fun"](wxid, cmd)
+            return cd["fun"](wxid=wxid, cmd=cmd)
 
-    def coc_flash(self, group, wxid, cmd):
+    def coc_flash(self, **kwargs):
+        group = kwargs["group"]
         data_new = self._get_group_status(group)
         if data_new:
             self.data[group] = data_new
@@ -112,81 +117,112 @@ class Network(DiceBase):
                                                                 self.data[group]["config"]["succnum"] if "succnum" in self.data[group]["config"].keys() and self.data[group]["config"]["succnum"]>0 else "默认",
                                                                 self.data[group]["config"]["failnum"] if "failnum" in self.data[group]["config"].keys()  and  self.data[group]["config"]["failnum"]>0 else "默认")
 
+    def help_group(self, **kwargs):
+        cmd = kwargs["cmd"]
+        pattern = re.compile(r'\.help\s*(?P<cmd>.*)?')
+        match = pattern.match(cmd)
+        key = match.group("cmd")
+        if key:
+            if key.strip() == "r":
+                result = "【使用帮助-表达式】\n 1、基础投掷 \n .r[h][5#][1d100][b2][p3][+-*/][2d10] h表示暗骰，#前面数字代表投骰次数，b接奖励数量，p接惩罚骰数量，支持四则运算\n2、快捷投掷 .r沙鹰 这样使用的前提是角色卡中有名为沙鹰的武器\n3、.ra .rc 详见.help ra \n4、.r 等同于.r1d100"
+            elif key.strip() == "ra" or key.strip()=="rc":
+                result = "【使用帮助-属性技能检定】\n .ra[h][3#][b2][p3][属性/技能][目标值] h表示暗骰，#前面数字代表投骰次数，b接奖励数量，p接惩罚骰数量，，如果指定目标值则以目标值进行判断，但不会为自己的角色卡添加成长标记"
+            return "【使用帮助-群里】\n 使用.help r或.help ra 查看具体帮助，其他的指令暂无详细说明"
+        else:
+            result = "【使用帮助-群里】\n"
+            result += "\n".join([l["help"] for l in self.cmds_group])
+            return result
 
-    def help_group(self, group, wxid, cmd):
-        result = "【使用帮助-群里】\n"
-        result += "\n".join([l["help"] for l in self.cmds_group])
-        return result
-
-    def help_self(self, wxid, cmd):
+    def help_self(self, **kwargs):
         result = "【使用帮助-个人】\n"
         result += "\n".join([l["help"] for l in self.cmds_self])
         return result
 
-    def save_log(self, group, wxid, cmd, result):
+    def save_log(self,  **kwargs):
+        group, wxid, cmd, result = kwargs["group"], kwargs["wxid"], kwargs["cmd"], kwargs["result"]
         if group in self.data.keys() and "status" in self.data[group].keys() and \
                 self.data[group]["status"] and self.data[group]["Gaming"] == "start":
             self.log_input(group, cmd, self._get_name(wxid))
             if result:
                 self.log_input(group, cmd, "骰娘")
 
-    def get_log(self, group, wxid, cmd):
+    def get_log(self,  **kwargs):
+        group = kwargs["group"]
         self.log_get(group)
 
-    def bot_on(self, group, wxid, cmd):
+    def bot_on(self, **kwargs):
+        group = kwargs["group"]
         return self._bot_on_or_off(group, True)
 
-    def bot_off(self, group, wxid, cmd):
+    def bot_off(self, **kwargs):
+        group = kwargs["group"]
         return self._bot_on_or_off(group, False)
 
-    def game_start(self, group, wxid, cmd):
+    def game_start(self, **kwargs):
+        group = kwargs["group"]
         return self._game_start_or_end(group, "start")
 
-    def game_pause(self, group, wxid, cmd):
+    def game_pause(self, **kwargs):
+        group = kwargs["group"]
         return self._game_start_or_end(group, "pause")
 
-    def game_end(self, group, wxid, cmd):
+    def game_end(self, **kwargs):
+        group = kwargs["group"]
         return self._game_start_or_end(group, "end")
 
-    def jrrp_group(self, group, wxid, cmd):
+    def jrrp_group(self, **kwargs):
+        group = kwargs["group"]
+        wxid = kwargs["wxid"]
         return self._dice_jrrp(group, wxid)
 
-    def jrrp_yj_group(self, group, wxid, cmd):
+    def jrrp_yj_group(self, **kwargs):
+        group = kwargs["group"]
+        wxid = kwargs["wxid"]
         return self._dice_yijing(group, wxid)
 
-    def jrrp_yj_self(self, wxid, cmd):
+    def jrrp_yj_self(self, **kwargs):
+        wxid = kwargs["wxid"]
         return self._dice_yijing("", wxid)
 
-    def jrrp_tl_group(self, group, wxid, cmd):
+    def jrrp_tl_group(self, **kwargs):
+        group = kwargs["group"]
+        wxid = kwargs["wxid"]
         return self._dice_taluo(group, wxid)
 
-    def jrrp_tl_self(self, wxid, cmd):
+    def jrrp_tl_self(self, **kwargs):
+        wxid = kwargs["wxid"]
         return self._dice_taluo("", wxid)
 
-    def jrrp_self(self, wxid, cmd):
+    def jrrp_self(self, **kwargs):
+        wxid = kwargs["wxid"]
         return self._dice_jrrp("", wxid)
 
-    def coc_admin(self, group, wxid, cmd):
+    def coc_admin(self, **kwargs):
+        group = kwargs["group"]
         url = self.api + "/admin?group=%s" % (group)
         return "【KP】请打开该链接查看和管理所有PC角色卡：\n %s" % (url)
 
-    def coc_pc_self(self, wxid, cmd):
+    def coc_pc_self(self, **kwargs):
+        wxid = kwargs["wxid"]
         id = self._get_id_from_wxid(wxid)
-        print(id)
         url = self.api + "/self?user=%s" % (id)
         return "请打开该链接管理角色卡：\n %s" % ( url)
 
-    def coc_new_pc(self, group, wxid, cmd):
+    def coc_new_pc(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
         url = self.api + "/coc?group=%s&user=%s" % (group, wxid)
         return "【%s】请打开该链接创建或编辑角色卡：\n %s" % (self._get_name(wxid), url)
 
-    def coc_ra(self, group, wxid, cmd, user={}):
-        pattern = re.compile(r'\.r[ac]((?P<times>\d+)#)?(b(?P<bonus>\d+))?(p(?P<penalty>\d+))?(?P<att>[^\d]*)?(?P<gold>\d+)?')
+    def coc_ra(self, user={}, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
+        pattern = re.compile(r'\.r[ac](?P<hidden>h)?((?P<times>\d+)#)?(b(?P<bonus>\d+))?(p(?P<penalty>\d+))?(?P<att>[^\d]*)?(?P<gold>\d+)?')
         match = pattern.match(cmd)
         if match:
             gold = match.group("gold")
             att = match.group("att")
             times = int(match.group("times")) if match.group("times") else 1
+            hidden = match.group("hidden")
             if gold:
                 gold = int(gold.strip())
                 exp = "1d100"
@@ -196,10 +232,15 @@ class Network(DiceBase):
                     exp += "b%s"%match.group("penalty")
                 if times == 1:
                     result = self.roll_dice(exp)
-                    return self._clear_check(self._get_name(wxid), result, self.data[group]["config"], att, gold)
+                    res = self._clear_check(self._get_name(wxid), result, self.data[group]["config"], att, gold)
                 else:
                     result = [self.roll_dice(exp) for i in range(times)]
-                    return self._clear_check(self._get_name(wxid), result, self.data[group]["config"], att, gold, times)
+                    res = self._clear_check(self._get_name(wxid), result, self.data[group]["config"], att, gold, times)
+                if hidden:
+                    self._send_hidden(group, kwargs["sender"], res)
+                    return self._hidden_result(cmd, wxid)
+                else:
+                    return res
             else:
                 if "name" not in user.keys():
                     return self._nouser_error(cmd, wxid)
@@ -216,7 +257,7 @@ class Network(DiceBase):
                 else:
                     for i in range(len(user["skill"])):
                         sk = user["skill"][i]
-                        if sk["showName"] == att:
+                        if sk["showName"] == att or ("subName" in sk.keys() and sk["subName"]==att) or sk["showName"][-len(att):]==att:
                             gold = sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"]
                             if not sk["ensure"] and sk["levelup"]:
                                 skillindex = i
@@ -233,7 +274,7 @@ class Network(DiceBase):
                         # 标记可成长
                         if skillindex >= 0 and (result[-1] == 1 or result[-1] <= gold):
                             self._sign_skill_ensure(user, skillindex)
-                        return self._clear_check(user['name'], result, self.data[group]["config"], att, gold)
+                        res = self._clear_check(user['name'], result, self.data[group]["config"], att, gold)
                     else:
                         result = []
                         for i in range(times):
@@ -242,14 +283,23 @@ class Network(DiceBase):
                             if skillindex >= 0 and (rt[-1] == 1 or rt[-1] <= gold):
                                 self._sign_skill_ensure(user, skillindex)
                             result.append(rt)
-                        return self._clear_check(user['name'], result, self.data[group]["config"], att, gold, times)
+                        res = self._clear_check(user['name'], result, self.data[group]["config"], att, gold, times)
+                    if hidden:
+                        self._send_hidden(group, kwargs["sender"], res)
+                        return self._hidden_result(cmd, wxid)
+                    else:
+                        return res
         else:
             return self._cmd_error(cmd, wxid)
 
-    def coc_roll_self(self, wxid, cmd):
-        return self.coc_roll("", wxid, cmd)
+    def coc_roll_self(self, **kwargs):
+        wxid = kwargs["wxid"]
+        cmd = kwargs["cmd"]
+        return self.coc_roll(group="", wxid=wxid, cmd=cmd)
 
-    def coc_dex(self, group, wxid, cmd):
+    def coc_dex(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         # 指令内涵数据
         pattern = re.compile(r'([^\d]+)([\d]+)')
         matches = pattern.findall(cmd[4:])
@@ -271,15 +321,28 @@ class Network(DiceBase):
         result = result[:-4]
         return result
 
-    def coc_roll(self, group, wxid, cmd):
+    def coc_roll(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         pattern = re.compile(r'\.r(?P<exp>.+)?')
         match = pattern.match(cmd)
-        exp = match.group("exp")
+        exp = match.group("exp").strip()
         if exp:
-            result = self.evaluate_expression(exp)
+            if exp[0] == "h":
+                hidden = True
+                exp_ = exp[1:].strip()
+            else:
+                hidden = False
+                exp_ = exp
+            result = self.evaluate_expression(exp_)
             # 基础投掷式
             if result:
-                return self._clear_dice(self._get_name(wxid), result, exp )
+                res = self._clear_dice(self._get_name(wxid), result, exp)
+                if hidden:
+                    self._send_hidden(group, kwargs["sender"], res)
+                    return self._hidden_result(cmd, wxid)
+                else:
+                    return res
             else:
                 user = self._get_user_data(group, wxid)
                 # 角色获取
@@ -290,52 +353,100 @@ class Network(DiceBase):
                         return weapon
                     else:
                         if exp[0] == "a":
-                            return self.coc_ra(group, wxid, cmd, user)
+                            return self.coc_ra(user=user, **kwargs)
                         elif exp[0] == "c":
-                            return self.coc_ra(group, wxid, cmd, user)
+                            return self.coc_ra(user=user, **kwargs)
                         else:
                             return self._cmd_error(cmd, wxid)
                 else:
                     if exp[0] == "c":
-                        return self.coc_ra(group, wxid, cmd, user)
+                        return self.coc_ra(user={},**kwargs)
                     else:
                         return self._cmd_error(cmd, wxid)
         else:
             result = self.evaluate_expression("1d100")
-            return self._clear_dice(self._get_name(wxid), result, "1d100")
-        return self._cmd_error(cmd, wxid)
+            res = self._clear_dice(self._get_name(wxid), result, "1d100")
+            return res
 
-    def coc_st(self, group, wxid, cmd):
-        pattern = re.compile(r'\.st\s*(?P<exp>[a-zA-Z]+)(?P<other>.+)')
-        match = pattern.match(cmd)
-        if match:
-            exp = match.group("exp").strip()
-            exp = exp.upper()
-            other = match.group("other").strip()
-            user = self._get_user_data(group, wxid)
-            if user.keys():
-                if exp in user["attex"].keys():
-                    if other:
-                        other = re.sub(" ", "", other)
-                        orgin = user["attex"][exp]
-                        cal = str(orgin) + other
-                        result = self.evaluate_expression(cal)
-                        if result:
-                            result = result[0]
-                            if (exp+"_MAX") in user["attex"].keys():
-                                result = user["attex"][exp+"_MAX"] if user["attex"][exp+"_MAX"]<result else result
-                            result = int(result)
-                            user["attex"][exp] = result
-                            r = self._update_card(user)
-                            if r:
-                                return "%s的[%s]已更新[%s]->[%s]"%(user["name"], exp, orgin, result)
-                            else:
-                                return "%s的[%s]更新失败"%(user["name"], exp)
+    def coc_st(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
+
+        user = self._get_user_data(group, wxid)
+        if user.keys():
+            exp = cmd[3:].strip()
+            if exp[0] == "&":
+                wplist = exp.replace("&", "").split("=")
+                if len(wplist)==2:
+                    user["weapon"].append({"名称":wplist[0], "伤害":wplist[1]})
+                    self._update_card(user)
+                    return "【%s】添加武器/快捷表达式:%s:%s"%(user["name"], wplist[0], wplist[1])
+                else:
+                    return self._cmd_error(cmd, wxid)
             else:
-                return self._nouser_error(cmd, wxid)
+                pattern = re.compile(r'(?P<attex>[^\d+-]+)\s*(?P<cals>[+-])?\s*(?P<number>\d+)')
+                matchs = pattern.findall(exp)
+                res = "【%s】更新:"%user["name"]
+                errorskill = ""
+                errornotfound = ""
+                for match in matchs:
+                    exp = match[0].strip().upper()
+                    cals = match[1]
+                    number = int(match[2])
+                    # 先找exp:属性
+                    if exp in user["attribute"].keys():
+                        if cals=="+":
+                            result = int(user["attribute"][exp]) + number
+                        elif cals=="-":
+                            result = int(user["attribute"][exp]) - number
+                        else:
+                            result = number
+                        result = result if result > 0 else 0
+                        res += "\n【%s】[%s]->[%s]"%(exp, user["attribute"][exp], result)
+                        user["attribute"][exp] = result
+                    elif exp in user["attex"].keys():
+                        if cals=="+":
+                            result = int(user["attex"][exp]) + number
+                        elif cals=="-":
+                            result = int(user["attex"][exp]) - number
+                        else:
+                            result = number
+                        if (exp+"_MAX") in user["attex"].keys():
+                            result = user["attex"][exp+"_MAX"] if user["attex"][exp+"_MAX"]<result else result
+                        res += "\n【%s】[%s]->[%s]"%(exp, user["attex"][exp], result)
+                        user["attex"][exp] = result
+                    else:
+                        for i in range(len(user["skill"])):
+                            sk = user["skill"][i]
+                            find = False
+                            if sk["showName"]==exp or ("subName" in sk.keys() and sk["subName"]==exp) or sk["showName"][-len(exp):]==exp:
+                                find = True
+                                if cals=="+":
+                                    result = int(user["skill"][i]["ensurePoint"]) + number
+                                    res += "\n【%s】[%s]->[%s]"%(exp, user["skill"][i]["ensurePoint"]+user["skill"][i]["defaultPoint"]+user["skill"][i]["workPoint"]+user["skill"][i]["interPoint"], result+user["skill"][i]["workPoint"]+user["skill"][i]["interPoint"]+user["skill"][i]["defaultPoint"])
+                                    user["skill"][i]["ensurePoint"] = result
+                                elif cals=="-":
+                                    result = int(user["skill"][i]["ensurePoint"]) - number
+                                    res += "\n【%s】[%s]->[%s]"%(exp, user["skill"][i]["ensurePoint"]+user["skill"][i]["defaultPoint"]+user["skill"][i]["workPoint"]+user["skill"][i]["interPoint"], result+user["skill"][i]["workPoint"]+user["skill"][i]["interPoint"]+user["skill"][i]["defaultPoint"])
+                                    user["skill"][i]["ensurePoint"] = result
+                                else:
+                                    errorskill += "【%s】"%exp
+                                break
+                        if not find:
+                            errornotfound += "【%s】"%exp
+                if errorskill:
+                    res += "\n 不支持直接给技能赋值，请使用+-调整成长值，车卡请使用.pc：%s"%errorskill
+                if errornotfound:
+                    res += "\n 以下属性/技能未找到：%s"%errornotfound
+                self._update_card(user)
+                return res  
+        else:
+            return self._nouser_error(cmd, wxid)
         return self._cmd_error(cmd, wxid)
 
-    def coc_sc(self, group, wxid, cmd):
+    def coc_sc(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         pattern = re.compile(r'\.sc\s*(?P<sucess>[0-9dD\s]+)\/(?P<fail>[0-9dD\s]+)')
         match = pattern.match(cmd)
         if match:
@@ -377,7 +488,9 @@ class Network(DiceBase):
         else:
             return self._cmd_error(cmd, wxid)
 
-    def coc_en(self, group, wxid, cmd):
+    def coc_en(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         user = self._get_user_data(group, wxid)
         if not user:
             return self._nouser_error(cmd,wxid)
@@ -411,7 +524,9 @@ class Network(DiceBase):
         self._update_card(user)
         return '[%s] 进行幕间成长：%s'%(user['name'], text if text else "\n没有可成长技能")
 
-    def coc_stshow(self, group, wxid, cmd):
+    def coc_stshow(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         user = self._get_user_data(group, wxid)
         if user.keys():
             return "[%s]HP:%s/%s,MP:%s/%s,SAN:%s/%s,敏捷%s" % (user["name"], user["attex"]["HP"], user["attex"]["HP_MAX"], user["attex"]["MP"],
@@ -419,7 +534,9 @@ class Network(DiceBase):
         else:
             return self._nouser_error(cmd, wxid)
 
-    def coc_find(self, group, wxid, cmd):
+    def coc_find(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         pattern = re.compile(r'\.find\s*(?P<value>.*)')
         match = pattern.match(cmd)
         if match:
@@ -471,10 +588,10 @@ class Network(DiceBase):
                         for k in range(len(user["skill"])):
                             if user["skill"][k]["showName"]==key:
                                 sk = user["skill"][k]
-                                return "[%s]的技能【%s】为【%s】" % (user["name"], key, sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"])
+                                return "[%s]的技能【%s】为【%s】" % (user["name"], key, sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"])                 
                     elif key in ["技能", "skill", "SKILL"]:
                         r = []
-                        for sk in range(len(user["skill"])):
+                        for sk in user["skill"]:
                             if sk["interPoint"] + sk["workPoint"] > 0:
                                 r.append("[%s]%s"%(sk["showName"],  sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"]))
                         return "[%s]的技能有:\n%s" % (user["name"], "\n".join(r))
@@ -506,21 +623,27 @@ class Network(DiceBase):
             else:
                 return self._nouser_error(cmd, wxid)
 
-    def coc_ti(self, group, wxid, cmd):
+    def coc_ti(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         user = self._get_user_data(group, wxid)
         if user.keys():
             return self._get_fk(user, True)
         else:
             return self._nouser_error(cmd, wxid)
 
-    def coc_li(self, group, wxid, cmd):
+    def coc_li(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         user = self._get_user_data(group, wxid)
         if user.keys():
             return self._get_fk(user, False)
         else:
             return self._nouser_error(cmd, wxid)
 
-    def coc_group(self, group, wxid, cmd):
+    def coc_group(self, **kwargs):
+        group, wxid = kwargs["group"], kwargs["wxid"]
+        cmd = kwargs["cmd"]
         pattern = re.compile(r'\.group\s*(?P<gd>gd(?P<gdnum>\d+))?\s*(?P<time>time(?P<timenum>\d+))?\s*(?P<s>s(?P<snum>\d+))?\s*(?P<f>f(?P<fnum>\d+))?')
         match = pattern.match(cmd)
         if match:
@@ -545,7 +668,6 @@ class Network(DiceBase):
             return "房规已更新！\n" + "当前房规为:\n车卡:天命[%s]或购点[%s]\n检定:大成功[%s];大失败[%s]"\
                     %(config["dicetime"], config["point"], config["succnum"] if "succnum" in config.keys() else "默认", config["failnum"] if "failnum" in config.keys() else "默认",)
         return self._cmd_error(cmd, wxid)
-
 
     def _get_fk(self, user, now):
         r = [
@@ -717,6 +839,10 @@ class Network(DiceBase):
             cmd = "." + cmd[1:] if len(cmd)>1 else ""
         return cmd
 
+    def _send_hidden(self, group, wxid, result):
+        groupname = self._get_name(group)
+        selftext = "您在群[%s]中暗骰的结果为:%s"%(groupname, result)
+        self.wcf.send_text(f"{selftext}", wxid)
 
     def _roll_nandu(self, result, value, config={}):
         bigsucc = int(config["succnum"])if "succnum" in config.keys() and config["succnum"]>0  else 1
@@ -752,7 +878,6 @@ class Network(DiceBase):
 
         return nandu
 
-
     def _cmd_error(self, cmd, wxid):
         name = self._get_name(wxid)
         return "[%s]的指令[%s]无法识别"%(name, cmd)
@@ -760,6 +885,10 @@ class Network(DiceBase):
     def _nouser_error(self, cmd, wxid):
         name = self._get_name(wxid)
         return "[%s]没有角色卡"%(name)
+
+    def _hidden_result(self, cmd, wxid):
+        name = self._get_name(wxid)
+        return "[%s]偷偷地投骰[%s]，结果已私发"%(name, cmd)
 
     def _clear_check(self, name, resultlist, config, forwhat, value, times=1):
         if times == 1:
@@ -813,7 +942,6 @@ class Network(DiceBase):
         res = requests.post(self.api+"/api/coc_self_update", data=json.dumps({"card_id": data["_id"], "data": data}))
         res = res.json()
         return res["ok"]
-
 
     def _get_user_data(self, group, wxid):
         res = requests.post(self.api+"/api/coc_group_get_one", data=json.dumps({"group": group, "user": wxid}))
