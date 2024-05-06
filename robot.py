@@ -85,6 +85,9 @@ class Robot(Job):
                     self.LOG.info("已更新")
             else:
                 self.toChitchat(msg)  # 闲聊
+        elif msg.type == 49:  # 共享实时位置、文件、转账、链接
+            if not msg.from_self():
+                self.toChitchat(msg)  # 闲聊
 
     def onMsg(self, msg: WxMsg) -> int:
         try:

@@ -5,6 +5,7 @@ from base.dicebase import DiceBase
 import re
 from wcferry import Wcf, WxMsg
 import time
+from bs4 import BeautifulSoup
 
 class Network(DiceBase):
     def __init__(self, config, wcf:Wcf):
@@ -34,6 +35,8 @@ class Network(DiceBase):
             {"re": "\.find.*", "fun": self.coc_find, "help": ".find[查询内容] 查询"},
             {"re": "\.ti", "fun": self.coc_ti, "help": ".ti 生成临时疯狂症状"},
             {"re": "\.li", "fun": self.coc_li, "help": ".li 生成总结疯狂症状"},
+            {"re": "\.markshow.*", "fun": self.coc_mark_get, "help": ".markshow[线索组名称] 查看所有线索"},
+            {"re": "\.mark.*", "fun": self.coc_mark, "help": ".mark[线索组名称] 只有引用其他文本时有效，将此内容标记为线索"},
             {"re": "\.flash", "fun": self.coc_flash, "help": ".flash 刷新群组设置"},
             {"re": "\.group.+", "fun": self.coc_group, "help": ".group [gd[购点数量]] [time[随机次数]] [s[大成功点数]] [f[大失败点数]] 房规设置"},
             {"re": "\.help.*", "fun": self.help_group, "help": ".help[r][ra] 帮助"},
@@ -44,7 +47,7 @@ class Network(DiceBase):
             {"re": "\.pc", "fun": self.coc_pc_self, "help": ".pc 打开角色管理面板"},
             {"re": "\.r.*", "fun": self.coc_roll_self, "help": ".r[表达式] 投骰"},
             {"re": "\.help.*", "fun": self.help_self, "help": ".help 帮助"},
-            {"re": "塔罗", "fun": self.jrrp_tl_self, "help": "塔罗 塔罗牌来一卦"},
+            {"re": "塔罗", "fun": self.jrrp_tl_self, "help": "塔罗 塔罗牌来一卦"}
         ]
 
     def cmd2fun_group(self, cmd):
@@ -64,6 +67,9 @@ class Network(DiceBase):
         return False
 
     def get_answer(self, cmd: str, msg: WxMsg) -> str:
+        if msg.type == 49:
+            msgxml = BeautifulSoup(msg.content, 'xml')
+            cmd = msgxml.find("title").text
         # 获取回答主函数
         isgroup = msg.from_group()
         wxid = msg.sender
@@ -76,12 +82,12 @@ class Network(DiceBase):
                 for key in self.data[group]["users"]:
                     if msg.is_at(key):
                         isat = True
-                        result = self.get_group_answer(cmd, key, group, wxid)
+                        result = self.get_group_answer(cmd, key, group, msg, wxid)
                         self.save_log(group=group, wxid=wxid, cmd=cmd, result=result)
                         if result:
                             self.wcf.send_text(f"{result}", group)
             if not isat:
-                result = self.get_group_answer(cmd, wxid, group)
+                result = self.get_group_answer(cmd, wxid, group, msg)
                 self.save_log(group=group, wxid=wxid, cmd=cmd, result=result)
                 return result
             else:
@@ -90,16 +96,16 @@ class Network(DiceBase):
             result = self.get_user_answer(cmd, wxid)
             return result
 
-    def get_group_answer(self, cmd:str, wxid:str, group:str, sender:str=""):
+    def get_group_answer(self, cmd:str, wxid:str, group:str, msg:WxMsg, sender:str=""):
         # 处理或记录
         cd = self.cmd2fun_group(cmd)
         if cd:
             if not ("super" in cd.keys() and cd["super"]) and (not ("status" in self.data[group].keys() and self.data[group]["status"])):
                 return
             if sender:
-                return cd["fun"](group=group, wxid=wxid, cmd=cmd, sender=sender)
+                return cd["fun"](group=group, wxid=wxid, cmd=cmd, sender=sender, msg=msg)
             else:
-                return cd["fun"](group=group, wxid=wxid, cmd=cmd, sender=wxid)
+                return cd["fun"](group=group, wxid=wxid, cmd=cmd, sender=wxid, msg=msg)
 
     def get_user_answer(self, cmd:str, wxid:str):
         # 处理或记录
@@ -127,7 +133,9 @@ class Network(DiceBase):
                 result = "【使用帮助-表达式】\n 1、基础投掷 \n .r[h][5#][1d100][b2][p3][+-*/][2d10] h表示暗骰，#前面数字代表投骰次数，b接奖励数量，p接惩罚骰数量，支持四则运算\n2、快捷投掷 .r沙鹰 这样使用的前提是角色卡中有名为沙鹰的武器\n3、.ra .rc 详见.help ra \n4、.r 等同于.r1d100"
             elif key.strip() == "ra" or key.strip()=="rc":
                 result = "【使用帮助-属性技能检定】\n .ra[h][3#][b2][p3][属性/技能][目标值] h表示暗骰，#前面数字代表投骰次数，b接奖励数量，p接惩罚骰数量，，如果指定目标值则以目标值进行判断，但不会为自己的角色卡添加成长标记"
-            return "【使用帮助-群里】\n 使用.help r或.help ra 查看具体帮助，其他的指令暂无详细说明"
+            else:
+                result = "【使用帮助-群里】\n 使用.help r或.help ra 查看具体帮助，其他的指令暂无详细说明"
+            return result
         else:
             result = "【使用帮助-群里】\n"
             result += "\n".join([l["help"] for l in self.cmds_group])
@@ -138,13 +146,14 @@ class Network(DiceBase):
         result += "\n".join([l["help"] for l in self.cmds_self])
         return result
 
+
     def save_log(self,  **kwargs):
         group, wxid, cmd, result = kwargs["group"], kwargs["wxid"], kwargs["cmd"], kwargs["result"]
         if group in self.data.keys() and "status" in self.data[group].keys() and \
                 self.data[group]["status"] and self.data[group]["Gaming"] == "start":
             self.log_input(group, cmd, self._get_name(wxid))
             if result:
-                self.log_input(group, cmd, "骰娘")
+                self.log_input(group, result, "骰娘")
 
     def get_log(self,  **kwargs):
         group = kwargs["group"]
@@ -197,6 +206,32 @@ class Network(DiceBase):
         wxid = kwargs["wxid"]
         return self._dice_jrrp("", wxid)
 
+    def coc_mark(self, **kwargs):
+        msg = kwargs["msg"]
+        group = kwargs["group"]
+        cmd = kwargs["cmd"]
+        pattern = re.compile(r'\.mark(?P<key>.*)')
+        match = pattern.match(cmd)
+        key = match.group("key").strip() if match.group("key") else ""
+        if msg.type!=49:
+            return "[.mark]指令需引用内容"
+        xml = BeautifulSoup(msg.content, 'xml')
+        xml2 = xml.find_all("content")[-1].contents[0].strip()
+        if BeautifulSoup(xml2, 'xml').find("msg"):
+            pass
+        else:
+            text = xml2
+            self.mark_input(group, text, key)
+
+    def coc_mark_get(self, **kwargs):
+        group = kwargs["group"]
+        cmd = kwargs["cmd"]
+        pattern = re.compile(r'\.markshow(?P<key>.*)')
+        match = pattern.match(cmd)
+        key = match.group("key").strip() if match.group("key") else ""
+        self.mark_get(group, key)
+
+
     def coc_admin(self, **kwargs):
         group = kwargs["group"]
         url = self.api + "/admin?group=%s" % (group)
@@ -216,20 +251,22 @@ class Network(DiceBase):
     def coc_ra(self, user={}, **kwargs):
         group, wxid = kwargs["group"], kwargs["wxid"]
         cmd = kwargs["cmd"]
-        pattern = re.compile(r'\.r[ac](?P<hidden>h)?((?P<times>\d+)#)?(b(?P<bonus>\d+))?(p(?P<penalty>\d+))?(?P<att>[^\d]*)?(?P<gold>\d+)?')
+        pattern = re.compile(r'\.r[ac](?P<hidden>h)?((?P<times>\d+)#)?(?P<bonus>b\d*)?(?P<penalty>p\d*)?(?P<att>[^\d]*)?(?P<gold>\d+)?')
         match = pattern.match(cmd)
         if match:
             gold = match.group("gold")
             att = match.group("att")
             times = int(match.group("times")) if match.group("times") else 1
             hidden = match.group("hidden")
+            exp = "1d100"
+            if match.group("bonus"):
+                number = match.group("bonus")[1:] if match.group("bonus")[1:] else 1
+                exp += "b%s" % number
+            if match.group("penalty"):
+                number = match.group("penalty")[1:] if match.group("penalty")[1:] else 1
+                exp += "p%s" % number
             if gold:
                 gold = int(gold.strip())
-                exp = "1d100"
-                if match.group("bonus"):
-                    exp += "b%s"%match.group("bonus")
-                if match.group("penalty"):
-                    exp += "b%s"%match.group("penalty")
                 if times == 1:
                     result = self.roll_dice(exp)
                     res = self._clear_check(self._get_name(wxid), result, self.data[group]["config"], att, gold)
@@ -264,11 +301,6 @@ class Network(DiceBase):
                 if gold < 0:
                     return "【%s】未找到【%s】属性/技能" % (user['name'], att)
                 else:
-                    exp = "1d100"
-                    if match.group("bonus"):
-                        exp += "b%s"%match.group("bonus")
-                    if match.group("penalty"):
-                        exp += "b%s"%match.group("penalty")
                     if times == 1:
                         result = self.roll_dice(exp)
                         # 标记可成长
@@ -384,7 +416,7 @@ class Network(DiceBase):
                 else:
                     return self._cmd_error(cmd, wxid)
             else:
-                pattern = re.compile(r'(?P<attex>[^\d+-]+)\s*(?P<cals>[+-])?\s*(?P<number>\d+)')
+                pattern = re.compile(r'(?P<attex>[^\d+-]+)\s*(?P<cals>[+-])?\s*(?P<number>[\dDd]+)')
                 matchs = pattern.findall(exp)
                 res = "【%s】更新:"%user["name"]
                 errorskill = ""
@@ -392,7 +424,11 @@ class Network(DiceBase):
                 for match in matchs:
                     exp = match[0].strip().upper()
                     cals = match[1]
-                    number = int(match[2])
+                    number_exp = match[2]
+                    if "d" in number_exp or "D" in number_exp:
+                        number = self.roll_dice(number_exp)[-1]
+                    else:
+                        number = int(number_exp)
                     # 先找exp:属性
                     if exp in user["attribute"].keys():
                         if cals=="+":
@@ -743,7 +779,7 @@ class Network(DiceBase):
             ["提问狂", "这是什么？", "你有强迫自己提问的冲动。不论何时何地，你都无法控制自己问问题。\n大多数问题都是直接对别人发问；不过有时你也会自问自答。你见到权威会发问，见到店主会发问，见到教团首脑也会发问，不一而足。\n你会对重要的事情特别关心，更可能对毫无疑问的显明事实一遍遍地发问。如果没有人回答出你想要的答案，你会大哭或发怒。\n如果有人或事阻止你提问，你会极度焦虑，所有技能检定受到一个惩罚骰，直到你满足欲望为止（战斗中不生效）。KP也可能根据情形或角色的状况改变某些技能检定的难度等级。\n成功使用精神分析技能可以让你暂时克服躁狂和它的严重不良效果。"],
             ["搔痒狂", "该死的疹子，出去！出去！", "你的症状是病态的搔痒行为。你感觉必须反复抓挠自己的皮肤，甚至会因此受到伤害。你最可能感觉你的皮肤上有什么东西或者得了什么奇怪的病。\n在紧张时或你独处思考时，情绪会突然爆发。虽然全身上下的皮肤都可能成为你抓挠的目标，但最常见的目标是面部（根据KP裁定，长期抓搔会降低你角色的APP）。\n如果有人或事阻止你搔痒，你会极度焦虑，所有技能检定受到一个惩罚骰，直到你满足欲望为止（战斗中不生效）。KP也可能根据情形或角色的状况改变某些技能检定的难度等级。\n成功使用精神分析技能可以让你暂时克服躁狂和它的严重不良效果。"],
         ]
-        r_time = self.roll_dice("1D10")[-1]
+        r_time = c
         time_text = "[1D10]=【%s】"%r_time
         name = user["name"]
         if now:
@@ -1023,6 +1059,8 @@ class Network(DiceBase):
         # 更新设置
         res = requests.post(self.api + "/api/coc_self_get_id", data=json.dumps({"user": wxid}))
         return res.json()["data"]
+
+
 
 if __name__ == "__main__":
     from configuration import Config

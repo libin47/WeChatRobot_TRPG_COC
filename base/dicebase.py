@@ -27,6 +27,15 @@ class DiceBase(object):
         self.wcf.send_file(os.path.join(dirname, self.logfile, "%s.txt"%group), group)
         return
 
+    def mark_input(self, group, text, key=""):
+        with open(os.path.join(self.logfile, "%s_mark_%s.txt"%(group, key)), "a", encoding="utf8") as f:
+            f.write('【%s】%s\n\n' % (datetime.datetime.now().strftime("%Y年%m月%d日%H:%M:%S"), text))
+
+    def mark_get(self, group, key=""):
+        dirname, filename = os.path.split(os.path.abspath(sys.argv[0]))
+        self.wcf.send_file(os.path.join(dirname, self.logfile, "%s_mark_%s.txt" % (group, key)), group)
+        return
+
     def _get_name(self, wxid):
         name = self.wcf.get_info_by_wxid(wxid)
         return name['name']
