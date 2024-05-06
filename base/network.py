@@ -77,21 +77,21 @@ class Network(DiceBase):
         if isgroup:
             group = msg.roomid
             self._init_group(group)
-            isat = False
-            if "users" in self.data[group].keys():
-                for key in self.data[group]["users"]:
-                    if msg.is_at(key):
-                        isat = True
-                        result = self.get_group_answer(cmd, key, group, msg, wxid)
-                        self.save_log(group=group, wxid=wxid, cmd=cmd, result=result)
-                        if result:
-                            self.wcf.send_text(f"{result}", group)
-            if not isat:
+            atwxids = self._get_at_wxids(msg)
+            if "" in atwxids:
+                atwxids.remove("")
+            if len(atwxids)>0:
+                cmd = re.sub("@.*", "", cmd).strip()
+                for key in atwxids:
+                    result = self.get_group_answer(cmd, key, group, msg, wxid)
+                    self.save_log(group=group, wxid=wxid, cmd=cmd, result=result)
+                    if result:
+                        self.wcf.send_text(f"{result}", group)
+                return ""
+            else:
                 result = self.get_group_answer(cmd, wxid, group, msg)
                 self.save_log(group=group, wxid=wxid, cmd=cmd, result=result)
                 return result
-            else:
-                return ""
         else:
             result = self.get_user_answer(cmd, wxid)
             return result
@@ -118,7 +118,7 @@ class Network(DiceBase):
         data_new = self._get_group_status(group)
         if data_new:
             self.data[group] = data_new
-            self.data[group]["users"] = list(self.wcf.get_chatroom_members(group))
+            # self.data[group]["users"] = list(self.wcf.get_chatroom_members(group))
         return "【群规】已刷新：天命%s或购点%s，大成功%s，大失败%s"%(self.data[group]["config"]["dicetime"], self.data[group]["config"]["point"],
                                                                 self.data[group]["config"]["succnum"] if "succnum" in self.data[group]["config"].keys() and self.data[group]["config"]["succnum"]>0 else "默认",
                                                                 self.data[group]["config"]["failnum"] if "failnum" in self.data[group]["config"].keys()  and  self.data[group]["config"]["failnum"]>0 else "默认")
@@ -502,7 +502,12 @@ class Network(DiceBase):
                         r = (r if r>0 else 0) if r<user["attex"]["SAN_MAX"] else user["attex"]["SAN_MAX"]
                         user["attex"]["SAN"] = r
                         self._update_card(user)
-                        return "%s理智检定【%s:%s/%s】,SAN值扣除[%s],【%s->%s】" % (user['name'],nandu, result, gold, sucess_result, gold, r)
+                        res = "%s理智检定【%s:%s/%s】,SAN值扣除[%s],【%s->%s】" % (user['name'],nandu, result, gold, sucess_result, gold, r)
+                        if sucess_result>=5:
+                            res += "\nSAN一次损失大于5点，可能陷入临时疯狂。"
+                        if sucess_result>=gold/5:
+                            res += "\nSAN当日损失大于当前1/5，可能陷入不定性疯狂。"
+                        return res
                     else:
                         return "表达式错误：【%s】" % sucess
                 else:
@@ -516,7 +521,12 @@ class Network(DiceBase):
                         r = (r if r > 0 else 0) if r < user["attex"]["SAN_MAX"] else user["attex"]["SAN_MAX"]
                         user["attex"]["SAN"] = r
                         self._update_card(user)
-                        return "%s理智检定【%s:%s/%s】,SAN值扣除[%s],【%s->%s】" % (user['name'],nandu, result, gold, fail_result, gold, r)
+                        res = "%s理智检定【%s:%s/%s】,SAN值扣除[%s],【%s->%s】" % (user['name'],nandu, result, gold, fail_result, gold, r)
+                        if fail_result>=5:
+                            res += "\nSAN一次损失大于5点，可能陷入临时疯狂。"
+                        if fail_result>=gold/5:
+                            res += "\nSAN当日损失大于当前1/5，可能陷入不定性疯狂。"
+                        return res
                     else:
                         return self._cmd_error(cmd, wxid)
             else:
@@ -1035,7 +1045,7 @@ class Network(DiceBase):
             else:
                 self._update_group_config(group, {"point":500, "dicetime": 5})
                 self._init_group(group)
-        self.data[group]["users"] = list(self.wcf.get_chatroom_members(group))
+        # self.data[group]["users"] = list(self.wcf.get_chatroom_members(group))
         return True
 
     def _get_group_status(self, group):
@@ -1059,6 +1069,17 @@ class Network(DiceBase):
         # 更新设置
         res = requests.post(self.api + "/api/coc_self_get_id", data=json.dumps({"user": wxid}))
         return res.json()["data"]
+
+    def _get_at_wxids(self, msg:WxMsg):
+        text = msg.xml
+        text = text.replace("\s", "").replace("\n", "").replace("\t", "")
+        pattern = re.compile(r'.*\[CDATA\[(?P<wxids>.*)\]\]')
+        match = pattern.match(text)
+        if match and match.group("wxids"):
+            return match.group("wxids").split(",")
+        else:
+            return []
+
 
 
 

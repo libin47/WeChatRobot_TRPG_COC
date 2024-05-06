@@ -54,7 +54,8 @@ class Robot(Job):
         if not self.chat:  # 没接 ChatGPT，固定回复
             pass
         else:
-            q = re.sub(r"@.*?[\u2005|\s]", "", msg.content).replace(" ", "")
+            # q = re.sub(r"@.*?[\u2005|\s]", "", msg.content).replace(" ", "")
+            q = msg.content.replace(" ", "")
             if len(q) > 0:  # and q[0] == '.'
                 rsp = self.chat.get_answer(q, msg)
 
