@@ -2,8 +2,9 @@
 !.gitignore
 !.github/
 dist/
+data/*.txt
+data/*.jpg
 build/
-data/
 *pyc
 __pycache__
 
@@ -11,3 +12,4 @@ logs/
 *.log
 *.log.*
 
+/base/data/

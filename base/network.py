@@ -26,13 +26,13 @@ class Network(DiceBase):
             {"re": "\.admin", "fun": self.coc_admin, "help": ".admin 获取KP管理面板地址"},
             {"re": "\.r.*", "fun": self.coc_roll, "help": ".r[h][表达式] 投骰"},
             {"re": "\.ra.+", "fun": self.coc_ra, "help": ".ra[h][次数#][属性/技能] 进行属性和技能检定"},
-            {"re": "\.stshow", "fun": self.coc_stshow, "help": ".stshow 查看基本信息"},
+            {"re": "\.show.*", "fun": self.coc_show, "help": ".show[查询内容] 查询角色信息"},
             {"re": "\.rc.+", "fun": self.coc_ra, "help": ".rc[h][次数#][属性/技能][目标值] 进行属性和技能检定，指定目标检定"},
-            {"re": "\.st.+", "fun": self.coc_st, "help": ".st[hp/mp/san][+-][变动值] 数值变更"},
+            {"re": "\.st.+", "fun": self.coc_st, "help": ".st[hp/mp/san/属性/技能][+-][变动值] 数值变更，技能只能+-，其他可直接赋值"},
             {"re": "\.dex.+", "fun": self.coc_dex, "help": ".dex[姓名80(敏捷数值)] 敏捷排序"},
             {"re": "\.en", "fun": self.coc_en, "help": ".en 成长检定"},
             {"re": "\.sc.+", "fun": self.coc_sc, "help": ".sc[成功值]/[失败值] 理智检定"},
-            {"re": "\.find.*", "fun": self.coc_find, "help": ".find[查询内容] 查询"},
+            {"re": "\.find.*", "fun": self.coc_find, "help": ".find[查询内容] 查询角色信息"},
             {"re": "\.ti", "fun": self.coc_ti, "help": ".ti 生成临时疯狂症状"},
             {"re": "\.li", "fun": self.coc_li, "help": ".li 生成总结疯狂症状"},
             {"re": "\.markshow.*", "fun": self.coc_mark_get, "help": ".markshow[线索组名称] 查看所有线索"},
@@ -294,7 +294,8 @@ class Network(DiceBase):
                 else:
                     for i in range(len(user["skill"])):
                         sk = user["skill"][i]
-                        if sk["showName"] == att or ("subName" in sk.keys() and sk["subName"]==att) or sk["showName"][-len(att):]==att:
+                        att = self._skill_clear(att)
+                        if sk["showName"] == att or ("subName" in sk.keys() and sk["subName"]==att) or sk["showName"].split(":")[-1]==att:
                             gold = sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"]
                             if not sk["ensure"] and sk["levelup"]:
                                 skillindex = i
@@ -366,10 +367,14 @@ class Network(DiceBase):
             else:
                 hidden = False
                 exp_ = exp
-            result = self.evaluate_expression(exp_)
+            exp_, what = self._get_exp(exp_)
+            if exp_:
+                result = self.evaluate_expression(exp_)
+            else:
+                result = False
             # 基础投掷式
             if result:
-                res = self._clear_dice(self._get_name(wxid), result, exp)
+                res = self._clear_dice(self._get_name(wxid), result, what if what else exp_)
                 if hidden:
                     self._send_hidden(group, kwargs["sender"], res)
                     return self._hidden_result(cmd, wxid)
@@ -571,6 +576,7 @@ class Network(DiceBase):
         return '[%s] 进行幕间成长：%s'%(user['name'], text if text else "\n没有可成长技能")
 
     def coc_stshow(self, **kwargs):
+        # 暂时弃用
         group, wxid = kwargs["group"], kwargs["wxid"]
         cmd = kwargs["cmd"]
         user = self._get_user_data(group, wxid)
@@ -579,6 +585,10 @@ class Network(DiceBase):
                                                              user["attex"]["MP_MAX"], user["attex"]["SAN"], user["attex"]["SAN_MAX"], user["attribute"]["敏捷"])
         else:
             return self._nouser_error(cmd, wxid)
+
+    def coc_show(self, **kwargs):
+        kwargs["cmd"] = kwargs["cmd"].replace(".show", ".find")
+        return self.coc_find(**kwargs)
 
     def coc_find(self, **kwargs):
         group, wxid = kwargs["group"], kwargs["wxid"]
@@ -590,6 +600,7 @@ class Network(DiceBase):
             if user.keys():
                 key = match.group("value")
                 if key:
+                    key = self._skill_clear(key)
                     if key in ["年龄", "年纪", "age", "AGE"]:
                         return "[%s]今年【%s】岁" % (user["name"], user["info"]["age"])
                     elif key in ["物品", "item", "ITEAM", "随身物品"]:
@@ -630,11 +641,27 @@ class Network(DiceBase):
                         for k in range(len(user["weapon"])):
                             if user["weapon"][k]["名称"]==key:
                                 return "[%s]的武器【%s】伤害为【%s】" % (user["name"], key, user["weapon"][k]["伤害"])
+                    elif key in ["步枪", "霰弹枪"]:
+                        for k in range(len(user["skill"])):
+                            if user["skill"][k]["showName"]=="射击:步/霰":
+                                sk = user["skill"][k]
+                                return "[%s]的技能【%s】为【%s】" % (user["name"], key, sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"])
                     elif key in [user["skill"][k]["showName"] for k in range(len(user["skill"]))]:
                         for k in range(len(user["skill"])):
-                            if user["skill"][k]["showName"]==key:
+                            if user["skill"][k]["showName"]==key or user["skill"][k]["subName"]==key:
                                 sk = user["skill"][k]
                                 return "[%s]的技能【%s】为【%s】" % (user["name"], key, sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"])                 
+                    elif key in [user["skill"][k]["subName"] for k in range(len(user["skill"]))]:
+                        for k in range(len(user["skill"])):
+                            if user["skill"][k]["subName"] == key:
+                                sk = user["skill"][k]
+                                return "[%s]的技能【%s】为【%s】" % (user["name"], key,sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"])
+                    elif key in [user["skill"][k]["showName"].split(":")[-1] for k in range(len(user["skill"]))]:
+                        for k in range(len(user["skill"])):
+                            if user["skill"][k]["showName"].split(":")[-1] == key:
+                                sk = user["skill"][k]
+                                return "[%s]的技能【%s】为【%s】" % (user["name"], key,sk["defaultPoint"] + sk["interPoint"] + sk["workPoint"] + sk["ensurePoint"])
+
                     elif key in ["技能", "skill", "SKILL"]:
                         r = []
                         for sk in user["skill"]:
@@ -658,12 +685,12 @@ class Network(DiceBase):
                         if k["workPoint"] > 0 or k["interPoint"] > 0:
                             result += k["showName"] + str(
                                 k["workPoint"] + k["interPoint"] + k["ensurePoint"] + k["defaultPoint"])
-                    result += "\n【武器】\n"
-                    for w in user["weapon"]:
-                        result += "%s: %s\n" % (w["名称"], w["伤害"])
-                    result += "【物品】%s\n" % user["item"]
-                    result += "【个人介绍】%s\n" % user["story"]["个人介绍"]
-                    result += "【特质】%s\n" % user["story"]["特质"]
+                    # result += "\n【武器】\n"
+                    # for w in user["weapon"]:
+                    #     result += "%s: %s\n" % (w["名称"], w["伤害"])
+                    # result += "【物品】%s\n" % user["item"]
+                    # result += "【个人介绍】%s\n" % user["story"]["个人介绍"]
+                    # result += "【特质】%s\n" % user["story"]["特质"]
 
                     return result
             else:
@@ -789,7 +816,7 @@ class Network(DiceBase):
             ["提问狂", "这是什么？", "你有强迫自己提问的冲动。不论何时何地，你都无法控制自己问问题。\n大多数问题都是直接对别人发问；不过有时你也会自问自答。你见到权威会发问，见到店主会发问，见到教团首脑也会发问，不一而足。\n你会对重要的事情特别关心，更可能对毫无疑问的显明事实一遍遍地发问。如果没有人回答出你想要的答案，你会大哭或发怒。\n如果有人或事阻止你提问，你会极度焦虑，所有技能检定受到一个惩罚骰，直到你满足欲望为止（战斗中不生效）。KP也可能根据情形或角色的状况改变某些技能检定的难度等级。\n成功使用精神分析技能可以让你暂时克服躁狂和它的严重不良效果。"],
             ["搔痒狂", "该死的疹子，出去！出去！", "你的症状是病态的搔痒行为。你感觉必须反复抓挠自己的皮肤，甚至会因此受到伤害。你最可能感觉你的皮肤上有什么东西或者得了什么奇怪的病。\n在紧张时或你独处思考时，情绪会突然爆发。虽然全身上下的皮肤都可能成为你抓挠的目标，但最常见的目标是面部（根据KP裁定，长期抓搔会降低你角色的APP）。\n如果有人或事阻止你搔痒，你会极度焦虑，所有技能检定受到一个惩罚骰，直到你满足欲望为止（战斗中不生效）。KP也可能根据情形或角色的状况改变某些技能检定的难度等级。\n成功使用精神分析技能可以让你暂时克服躁狂和它的严重不良效果。"],
         ]
-        r_time = c
+        r_time = self.roll_dice("1D10")[-1]
         time_text = "[1D10]=【%s】"%r_time
         name = user["name"]
         if now:
@@ -854,6 +881,15 @@ class Network(DiceBase):
                 res = "[%s]陷入了疯狂，症状为【%s】\n" \
                       "”%s“\n%s%s"%(name, rz[result][0], rz[result][1], rz[result][2], "\n(%s)"%rz[result][3] if len(rz[result])>3 and rz[result][3] else "")
                 return res
+
+    def _skill_clear(self, name):
+        if name in ["步枪", "霰弹枪", "散弹", "霰弹"]:
+            return "射击:步/霰"
+        if name == "斗殴":
+            return "格斗:斗殴"
+        if name == "手枪":
+            return "射击:手枪"
+        return name
 
     def _roll_weapon(self, exp, user):
         pt = re.compile(r'(?P<times>\d+#)?((?P<other>.+))?')
@@ -1079,6 +1115,17 @@ class Network(DiceBase):
             return match.group("wxids").split(",")
         else:
             return []
+
+    def _get_exp(self, exp):
+        pattern = re.compile(
+            r'^(?P<exp>(\d+#)?(\d+)([dD](\d+)(b\d+)?(p\d+)?)?([\+-x*\/÷](\d+)([dD](\d+)(b\d+)?(p\d+)?)?)*)(?P<result>.*)$')
+        match = pattern.match(exp)
+        if match:
+            exp = match.group("exp")
+            result = match.group("result")
+            return exp, result
+        else:
+            return False, False
 
 
 

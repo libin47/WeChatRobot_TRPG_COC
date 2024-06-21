@@ -18,8 +18,8 @@
 ## 使用说明
 ### 可选1
 1. 安装微信 `3.9.2.23`，下载地址在 [这里](https://github.com/lich0821/WeChatFerry/releases/latest)；也可以从 [WeChatSetup](https://gitee.com/lch0821/WeChatSetup) 找到。
-2. 如果想直接使用可[直接下载打包好的exe文件](https://github.com/libin47/WeChatRobot_TRPG_COC/releases/download/exe/main.exe)，在启动微信后直接运行即可（未测试，应该是需windows10+系统）
-（或者下载dist/main.exe）
+2. 下载dist/目录下的main.exe文件，也可在此[直接下载打包好的exe文件](https://github.com/libin47/WeChatRobot_TRPG_COC/releases/download/exe/main.exe)，在启动微信后直接运行即可（未测试，应该是需windows10+系统）
+
 
 
 ### 可选2
@@ -60,14 +60,15 @@ pyinstaller -F --add-data "config.yaml;." --add-data "config.yaml.template;." --
 .rc[次数#][属性/技能][目标值] 进行属性和技能检定，指定目标检定
 （以上三个可在r或a/c后接h以使用暗骰）
 .st[hp/mp/san][+-][变动值] 数值变更
-.stshow 查看基本信息
+.show[查询内容] 查询角色信息
+.find[查询内容] 查询角色信息 同上
 .dex[姓名80(敏捷数值)] 敏捷排序
 .en 成长检定
 .sc[成功值]/[失败值] 理智检定
-.find[查询内容] 查询
 .ti 生成临时疯狂症状
 .li 生成总结疯狂症状
 .mark[线索组名称] 只有引用其他文本时有效，将此内容标记为线索
+.markshow[线索组名称] 获取储存的线索组内容
 .flash 刷新群组设置
 .group [gd[购点数量]] [time[随机次数]] [s[大成功点数]] [f[大失败点数]] 房规设置
 .help 帮助

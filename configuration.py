@@ -43,3 +43,4 @@ class Config(object):
         logging.config.dictConfig(yconfig["logging"])
         self.GROUPS = yconfig["groups"]["enable"]
         self.Myself = yconfig.get("myself", {})
+        self.ChatGPT = yconfig.get("chatgpt", {})

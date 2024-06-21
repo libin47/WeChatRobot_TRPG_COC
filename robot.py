@@ -6,16 +6,7 @@ import time
 import xml.etree.ElementTree as ET
 from queue import Empty
 from threading import Thread
-
 from wcferry import Wcf, WxMsg
-
-# from base.func_bard import BardAssistant
-# from base.func_chatglm import ChatGLM
-# from base.func_chatgpt import ChatGPT
-# from base.func_chengyu import cy
-# from base.func_news import News
-# from base.func_tigerbot import TigerBot
-# from base.func_xinghuo_web import XinghuoWeb
 from base.func_myself import Myself
 from configuration import Config
 from job_mgmt import Job
