@@ -36,7 +36,7 @@ class Msg(object):
             return self.msg.member.puid
         # 私聊
         else:
-            return self.msg.sender
+            return self.msg.sender.puid
 
     def from_group(self):
         if self.msg.member:
@@ -53,6 +53,15 @@ class ItUos(object):
         self.config = Config()
         self.chat = Myself(self.config.Myself, self)
 
+        self.names = {}
+
+    # 每次有人发消息，把发送者id和昵称对应起来
+    def add_name(self, msg):
+        if msg.member:
+            self.names[msg.member.puid] = msg.member.name
+        else:
+            self.names[msg.sender.puid] = msg.sender.name
+
     def send_text(self, text, wxid):
         achat = self.get_chat(wxid)
         achat.send(text)
@@ -66,11 +75,11 @@ class ItUos(object):
         achat.send_image(file)
 
     def get_info_by_wxid(self, wxid):
-        achat = self.get_chat(wxid)
-        return achat.nick_name
+        return self.names[wxid]
 
 
     def get_rsp(self, msg):
+        self.add_name(msg)
         text = msg.text
         if len(text)>0:
             result = self.chat.get_answer(text, Msg(msg))
@@ -87,7 +96,7 @@ ituos = ItUos(bot)
 # 回复私聊的消息 (优先匹配后注册的函数!)
 @bot.register(User, TEXT)
 def reply_anything(msg):
-    print(msg.sender.remark_name+":"+msg.text)
+    # print(msg.sender.remark_name+":"+msg.text)
     ituos.get_rsp(msg)
 
 
@@ -95,9 +104,10 @@ def reply_anything(msg):
 # 回复群里的消息 (优先匹配后注册的函数!)
 @bot.register(Group, TEXT)
 def reply_group(msg):
-    print("[group]"+msg.member.nick_name+":"+msg.text)
+    # print("[group]"+msg.member.nick_name+":"+msg.text)
     ituos.get_rsp(msg)
 
 
 # 进入 Python 命令行、让程序保持运行
-embed()
+# embed()
+bot.join()
