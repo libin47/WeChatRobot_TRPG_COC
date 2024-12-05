@@ -3,12 +3,12 @@ import requests
 import json
 from base.dicebase import DiceBase
 import re
-from wcferry import Wcf, WxMsg
+# from wcferry import Wcf, WxMsg
 import time
 from bs4 import BeautifulSoup
 
 class Network(DiceBase):
-    def __init__(self, config, wcf:Wcf):
+    def __init__(self, config, wcf):
         super(Network, self).__init__(config, wcf)
         self.data = {}
         self.api = config['api']
@@ -66,7 +66,7 @@ class Network(DiceBase):
                 return c
         return False
 
-    def get_answer(self, cmd: str, msg: WxMsg) -> str:
+    def get_answer(self, cmd: str, msg) -> str:
         if msg.type == 49:
             msgxml = BeautifulSoup(msg.content, 'xml')
             cmd = msgxml.find("title").text
@@ -96,7 +96,7 @@ class Network(DiceBase):
             result = self.get_user_answer(cmd, wxid)
             return result
 
-    def get_group_answer(self, cmd:str, wxid:str, group:str, msg:WxMsg, sender:str=""):
+    def get_group_answer(self, cmd:str, wxid:str, group:str, msg, sender:str=""):
         # 处理或记录
         cd = self.cmd2fun_group(cmd)
         if cd:
@@ -1106,7 +1106,7 @@ class Network(DiceBase):
         res = requests.post(self.api + "/api/coc_self_get_id", data=json.dumps({"user": wxid}))
         return res.json()["data"]
 
-    def _get_at_wxids(self, msg:WxMsg):
+    def _get_at_wxids(self, msg):
         text = msg.xml
         text = text.replace("\s", "").replace("\n", "").replace("\t", "")
         pattern = re.compile(r'.*\[CDATA\[(?P<wxids>.*)\]\]')

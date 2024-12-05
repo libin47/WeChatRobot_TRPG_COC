@@ -38,7 +38,7 @@ class DiceBase(object):
 
     def _get_name(self, wxid):
         name = self.wcf.get_info_by_wxid(wxid)
-        return name['name']
+        return name
         # return wxid
 
     def _dice_jrrp(self, group,  wxid):
