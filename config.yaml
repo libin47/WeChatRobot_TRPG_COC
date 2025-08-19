@@ -46,5 +46,8 @@ myself:
   file_name : mydata.pk
   save: api
   api: "https://wxapp.wind-watcher.cn"
+  zhipu_api_key: "ecf786eaac32426085442da0c3318d71.zCqmKzqxK6bqZ8IO"
+  model: "glm-4-air"
+  image_path: "images/zp/"
 #  api: "http://127.0.0.1:7684"
 #  api: http://192.168.137.79:7684

@@ -1,4 +1,7 @@
-from wxpy import *
+
+from wxauto import WeChat
+from wxauto.msgs import FriendMessage
+
 from base.func_myself import Myself
 from configuration import Config
 from base.fun_ai_zhipu import ZhiPu
@@ -6,11 +9,11 @@ import time
 import datetime
 import requests
 # 初始化机器人，扫码登陆
-bot = Bot(cache_path=True)
-bot.enable_puid()
+bot = WeChat()
+# bot.enable_puid()
 
 class Msg(object):
-    def __init__(self, msg:Message):
+    def __init__(self, msg):
         self.msg = msg
         self.type = self.get_type()
         self.content = self.msg.text
@@ -47,7 +50,7 @@ class Msg(object):
             return False
 
 
-class ItUos(object):
+class Mychat(object):
     def __init__(self, bot):
         self.bot = bot
         self.friends = self.bot.friends()
@@ -126,7 +129,10 @@ def reply_group(msg):
     if time.time() - time.mktime(msg.create_time.timetuple()) < 10:
         ituos.get_rsp(msg)
 
-
-# 进入 Python 命令行、让程序保持运行
-# embed()
-bot.join()
+# 消息处理函数
+def on_message(msg, chat):
+    # 示例3：自动回复收到
+    if isinstance(msg, FriendMessage):
+        msg.quote('收到')
+bot.AddListenChat(nickname="张三", callback=on_message)
+bot.KeepRunning()
