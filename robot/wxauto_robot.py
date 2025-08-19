@@ -14,6 +14,8 @@ class Robot(object):
 
         self.wx.AddListenChat(nickname="听，风的声音", callback=self.on_message)
 
+        self.wx.KeepRunning()
+
     def on_message(self, msg, chat):
         if isinstance(msg, FriendMessage):
             if isinstance(msg, TextMessage):
@@ -41,9 +43,6 @@ class Robot(object):
     def send_image(self, path, user):
         return self.wx.SendFiles(path, user)
 
-config = Config()
-robot = Robot(config)
-# 保持程序运行
-robot.wx.KeepRunning()
+
 
 
